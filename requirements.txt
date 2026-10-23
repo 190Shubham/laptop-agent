@@ -6,3 +6,5 @@ sounddevice
 numpy
 SpeechRecognition
 pyttsx3
+Flask
+gunicorn

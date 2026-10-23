@@ -1,26 +1,32 @@
+from flask import Flask, request, jsonify
 from agent import run_agent
-from voice import listen, speak
 from offline import try_offline
 
-print("Laptop Agent ready. Type 'exit' to quit, or 'v' to speak a command.")
+app = Flask(__name__)
 
-while True:
-    command = input("You: ").strip()
-    if command.lower() in ("exit", "quit"):
-        break
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({
+        "status": "success",
+        "message": "Laptop Agent API is running!"
+    })
 
-    by_voice = False
-    if command.lower() in ("v", "voice"):
-        command = listen()
-        if not command:
-            continue
-        by_voice = True
-        print("You (voice):", command)
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.get_json(silent=True) or {}
+    command = data.get("message", "").strip()
 
-    if command:
+    if not command:
+        return jsonify({"error": "Message is required"}), 400
+
+    try:
         reply = try_offline(command)
+
         if reply is None:
             reply = run_agent(command)
-        print("Agent:", reply)
-        if by_voice:
-            speak(reply[:200])
+
+        return jsonify({"reply": str(reply)})
+
+    except Exception as e:
+        app.logger.exception("Agent execution failed")
+        return jsonify({"error": "Failed to process message"}), 500
