@@ -3,7 +3,7 @@ import time
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types, errors
-from tools.apps import open_website, open_app, create_folder
+from tools.apps import open_website, open_app, create_folder, search_web
 from tools.system import get_system_info, take_screenshot, get_current_time
 from tools.files import organize_folder
 from tools.launcher import open_any_app
@@ -11,7 +11,7 @@ from tools.launcher import open_any_app
 load_dotenv()
 client = genai.Client(api_key=os.getenv("API_KEY"))
 
-TOOLS = [open_website, open_app, open_any_app, create_folder,
+TOOLS = [open_website, open_app, create_folder, search_web,
          get_system_info, take_screenshot, get_current_time,
          organize_folder]
 
