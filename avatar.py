@@ -6,6 +6,7 @@ import sys
 import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from turtle import pos
 from urllib.parse import parse_qs, quote, urlparse
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -120,7 +121,10 @@ class NovaWindow(QWebEngineView):
         self.move(self.x() + dx, self.y() + dy)
 
     def show_menu(self, pos):
+        import wake
         menu = QMenu(self)
+        label = "Pause 'Hey Nova' listening" if wake.is_enabled() else "Resume 'Hey Nova' listening"
+        menu.addAction(label, wake.toggle)
         menu.addAction("Move to top right", self.move_to_top_right)
         menu.addAction("Quit Nova", QApplication.quit)
         menu.exec(self.mapToGlobal(pos))
@@ -136,6 +140,12 @@ def main():
     app = QApplication(sys.argv)
     window = NovaWindow(vrm_files[0])
     window.show()
+    from PyQt6.QtCore import QTimer
+    QTimer.singleShot(5000, nova_core.greet_on_start)
+    import wake
+    wake.start()
+    from tools import reminders
+    reminders.start(nova_core.announce)
     sys.exit(app.exec())
 
 

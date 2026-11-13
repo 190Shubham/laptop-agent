@@ -1,3 +1,4 @@
+from email.mime import text
 import re
 
 from tools.apps import (open_app, open_website, create_folder,
@@ -5,6 +6,8 @@ from tools.apps import (open_app, open_website, create_folder,
 from tools.files import organize_folder
 from tools.launcher import open_any_app
 from tools.system import get_system_info, take_screenshot, get_current_time
+from tools import controls
+from tools import folders, reminders, weather
 
 try:
     from tools.writer import type_text, press_key
@@ -13,7 +16,7 @@ except ImportError:  # typing tool not set up yet
 
 # Words that start a NEW command. "and play ..." starts a new command, but
 # "open calculator and paint" stays one command because "paint" is not in this list.
-VERBS = r"(?:play|search|google|type|press|open|create|make|organi[sz]e|take)"
+VERBS = r"(?:play|search|google|type|press|open|close|create|make|organi[sz]e|take|volume|mute|unmute|brightness|lock|shutdown|restart|cancel|remind)"
 SPLIT = re.compile(rf"\s*(?:,|\band then\b|\bthen\b|\band\b)\s+(?={VERBS}\b)", re.IGNORECASE)
 
 # "in brave" / "on chrome" anywhere in the sentence picks the browser
@@ -60,6 +63,64 @@ def _handle_part(part: str, browser: str):
     m = re.match(r"organi[sz]e\s+(?:the\s+)?(?:folder\s+)?(.+)", text)
     if m:
         return str(organize_folder(m.group(1).strip()))
+
+    if re.search(r"\b(?:cancel|stop|abort)\b.*\b(?:shutdown|shut down|restart)\b", text):
+        return str(controls.cancel_shutdown())
+    
+    if re.match(r"(?:shut\s?down|turn\s+off|power\s+off)(?:\s+(?:the|my))?(?:\s+(?:laptop|computer|pc))?$", text):
+        return str(controls.shutdown_computer(False))
+    if re.match(r"(?:restart|reboot)(?:\s+(?:the|my))?(?:\s+(?:laptop|computer|pc))?$", text):
+        return str(controls.shutdown_computer(True))
+    if re.match(r"lock(?:\s+(?:the|my))?(?:\s+(?:laptop|computer|pc|screen))?$", text):
+        return str(controls.lock_computer())
+
+    if re.match(r"(?:un)?mute\b", text) and len(text.split()) <= 3:
+        return str(controls.toggle_mute())
+    m = re.match(r"(?:set\s+)?(?:the\s+)?volume\s+(?:to\s+)?(\d{1,3})", text)
+    if m:
+        return str(controls.set_volume(int(m.group(1))))
+    m = re.match(r"(?:turn\s+)?(?:the\s+)?volume\s+(up|down)|(increase|raise|decrease|lower)\s+(?:the\s+)?volume", text)
+    if m:
+        up = m.group(1) == "up" or m.group(2) in ("increase", "raise")
+        return str(controls.volume_change("up" if up else "down"))
+
+    m = re.match(r"(?:set\s+)?(?:the\s+)?brightness\s+(?:to\s+)?(\d{1,3})", text)
+    if m:
+        return str(controls.set_brightness(int(m.group(1))))
+    m = re.match(r"(?:turn\s+)?(?:the\s+)?brightness\s+(up|down)|(increase|raise|decrease|lower)\s+(?:the\s+)?brightness", text)
+    if m:
+        up = m.group(1) == "up" or m.group(2) in ("increase", "raise")
+        return str(controls.change_brightness("up" if up else "down"))
+
+    m = re.match(r"(?:close|quit)\s+(?:the\s+)?(.+)", text)
+    if m:
+        return str(controls.close_app(m.group(1).strip()))
+
+        m = re.match(r"remind me in (\d+)\s*(second|sec|minute|min|hour|hr)s?\s+(?:to\s+|about\s+)?(.+)", text)
+    if m:
+        return str(reminders.remind_in(int(m.group(1)), m.group(2), m.group(3)))
+    m = re.match(r"remind me at (\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\s+(?:to\s+|about\s+)?(.+)", text)
+    if m:
+        ampm = (m.group(3) or "").replace(".", "")
+        return str(reminders.remind_at(int(m.group(1)), int(m.group(2) or 0), ampm, m.group(4)))
+    m = re.match(r"(?:set\s+(?:a\s+)?)?timer\s+(?:for\s+)?(\d+)\s*(second|sec|minute|min|hour|hr)s?", text)
+    if m:
+        return str(reminders.remind_in(int(m.group(1)), m.group(2), "your timer is finished"))
+    if re.match(r"(?:list|show|what are)\s+(?:my\s+)?reminders", text):
+        return str(reminders.list_reminders())
+    if re.match(r"(?:clear|delete|cancel)\s+(?:all\s+)?(?:my\s+)?reminders", text):
+        return str(reminders.clear_reminders())
+
+    if re.search(r"\b(?:weather|temperature)\b", text) and len(text.split()) <= 8:
+        m = re.search(r"\b(?:in|at|for)\s+([a-z ]+?)\s*$", text)
+        return str(weather.get_weather(m.group(1) if m else ""))
+
+    m = re.match(r"open\s+(?:my\s+|the\s+)?(downloads|documents|desktop|pictures|music|videos|project)(?:\s+folder)?$", text)
+    if m:
+        return str(folders.open_folder(m.group(1)))
+    m = re.match(r"(?:open|find)\s+(?:the\s+|my\s+)?file\s+(?:called\s+|named\s+)?(.+)", text)
+    if m:
+        return str(folders.open_file(m.group(1).strip()))
 
     m = re.match(r"press\s+(enter|tab|backspace|esc|escape)$", text)
     if m:

@@ -11,3 +11,4 @@ agent_log.txt
 test_*.py
 check_qt.py
 list_voices.py
+reminders.json

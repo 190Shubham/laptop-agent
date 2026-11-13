@@ -16,6 +16,13 @@ TOOLS = [open_website, open_app, create_folder, search_web,
          get_system_info, take_screenshot, get_current_time,
          organize_folder, type_text, press_key]
 
+from tools.controls import (volume_change, set_volume, toggle_mute, set_brightness,
+                            change_brightness, close_app, lock_computer,
+                            shutdown_computer, cancel_shutdown)
+
+TOOLS += [volume_change, set_volume, toggle_mute, set_brightness,
+          change_brightness, close_app, lock_computer, shutdown_computer, cancel_shutdown]
+
 MODELS = ["gemini-3.5-flash", "gemini-3-flash-preview"]
 
 SYSTEM_PROMPT = (
