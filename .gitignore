@@ -5,3 +5,9 @@ __pycache__/
 agent_log.txt
 action_log.txt
 main_backup.py
+nova_log.txt
+agent_log.txt
+*_backup.py
+test_*.py
+check_qt.py
+list_voices.py

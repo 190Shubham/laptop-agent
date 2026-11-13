@@ -3,7 +3,7 @@ import queue
 import threading
 import tkinter as tk
 from tkinter import messagebox, scrolledtext
-
+import nova_hooks
 from agent import run_agent
 from offline import try_offline
 from voice import listen, speak

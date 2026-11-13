@@ -3,17 +3,18 @@ import time
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types, errors
-from tools.apps import open_website, open_app, create_folder, search_web
+from tools.apps import open_website, open_app, create_folder, search_web, play_on_youtube
 from tools.system import get_system_info, take_screenshot, get_current_time
 from tools.files import organize_folder
 from tools.launcher import open_any_app
+from tools.writer import type_text, press_key
 
 load_dotenv()
 client = genai.Client(api_key=os.getenv("API_KEY"))
 
 TOOLS = [open_website, open_app, create_folder, search_web,
          get_system_info, take_screenshot, get_current_time,
-         organize_folder]
+         organize_folder, type_text, press_key]
 
 MODELS = ["gemini-3.5-flash", "gemini-3-flash-preview"]
 

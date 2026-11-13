@@ -1,3 +1,33 @@
+# Nova: AI Desktop Agent
+
+Nova is a 3D cartoon assistant that lives in the top-right corner of your desktop.
+Talk to her or type, and she controls your laptop.
+
+![Nova](docs/nova.png)
+
+## What she can do
+- Open apps and websites in Brave or Chrome ("open youtube in brave")
+- Play a song on YouTube by name, in English or Hindi
+- Search Google, YouTube, Amazon, Flipkart and more
+- Type text into any app or website
+- Organize folders, take screenshots, show battery, CPU and RAM
+- Ask Allow / Deny before any risky action
+- Answer in a natural female voice, with her mouth moving in sync
+
+## How it works
+- **Brain:** Gemini with tool calling, plus an offline command parser that works when the API is busy
+- **Voice:** SpeechRecognition for input, Microsoft neural voices (edge-tts) for output, Windows voice as a backup
+- **Face:** a VRoid 3D model rendered with three.js and three-vrm inside a transparent PyQt6 window
+- **Safety:** app allow-list, confirmation popup, action log, and a secret token on the local server
+
+## Run it
+1. `pip install -r requirements.txt`
+2. Put your Gemini key in `.env` as `API_KEY=...`
+3. Put your VRM model in the `avatar` folder
+4. `python avatar.py` (or double-click `start_nova.vbs`)
+
+
+
 \# Laptop Agent
 
 

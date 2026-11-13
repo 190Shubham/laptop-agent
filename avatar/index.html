@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; font-family: "Segoe UI", sans-serif; }
+  #app { display: flex; flex-direction: column; height: 100%; box-sizing: border-box; padding: 8px; gap: 8px; }
+  #top { height: 150px; flex: none; display: flex; flex-direction: column; justify-content: flex-end; }
+  #bubble, #confirm { background: rgba(18, 21, 28, 0.94); color: #e6e8ee; border-radius: 14px; padding: 10px 12px; font-size: 13px; line-height: 1.4; max-height: 150px; overflow-y: auto; box-sizing: border-box; }
+  #heard { color: #8b93a7; font-size: 12px; margin-bottom: 4px; }
+  #stage { flex: 1; min-height: 0; position: relative; }
+  #stage canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+  #bar { display: flex; gap: 6px; flex: none; }
+  #cmd { flex: 1; min-width: 0; height: 40px; border: 0; outline: 0; border-radius: 20px; padding: 0 16px; background: rgba(18, 21, 28, 0.94); color: #e6e8ee; font-size: 13px; }
+  button { height: 40px; border: 0; border-radius: 20px; padding: 0 16px; background: #3b6cf6; color: #ffffff; font-size: 13px; cursor: pointer; }
+  #mic { background: #2a2f3d; }
+  #mic.live { background: #d9534f; }
+  .row { display: flex; gap: 8px; margin-top: 8px; }
+  .row button { height: 32px; }
+  #deny { background: #2a2f3d; }
+  [hidden] { display: none !important; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.177.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.177.0/examples/jsm/",
+    "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@3.4.2/lib/three-vrm.module.min.js"
+  }
+}
+</script>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <div id="confirm" hidden>
+      <div id="confirmText"></div>
+      <div class="row"><button id="allow">Allow</button><button id="deny">Deny</button></div>
+    </div>
+    <div id="bubble" hidden>
+      <div id="heard"></div>
+      <div id="reply"></div>
+    </div>
+  </div>
+  <div id="stage"></div>
+  <div id="bar">
+    <input id="cmd" placeholder="Ask Nova..." autocomplete="off">
+    <button id="send">Send</button>
+    <button id="mic">Speak</button>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
+
+const ARM_ANGLE = 1.2;
+const BLINK_ENABLED = false;
+const SWAY_ENABLED = false;
+
+const params = new URLSearchParams(location.search);
+const modelFile = params.get('model') || 'Nova.vrm';
+const TOKEN = params.get('token') || '';
+
+const stage = document.getElementById('stage');
+const bubble = document.getElementById('bubble');
+const heardEl = document.getElementById('heard');
+const replyEl = document.getElementById('reply');
+const confirmBox = document.getElementById('confirm');
+const confirmText = document.getElementById('confirmText');
+const cmd = document.getElementById('cmd');
+const mic = document.getElementById('mic');
+
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+renderer.setPixelRatio(window.devicePixelRatio);
+renderer.setClearColor(0x000000, 0);
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
+camera.position.set(0, 1.2, 2.0);
+camera.lookAt(0, 1.1, 0);
+
+const light = new THREE.DirectionalLight(0xffffff, Math.PI);
+light.position.set(1, 1, 1).normalize();
+scene.add(light);
+
+function resize() {
+  const w = Math.max(1, stage.clientWidth);
+  const h = Math.max(1, stage.clientHeight);
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+resize();
+
+let vrm = null;
+let state = 'idle';
+let speaking = false;
+let blinkStart = -1;
+let nextBlink = 4;
+const expr = { happy: 0, relaxed: 0 };
+
+const loader = new GLTFLoader();
+loader.register((parser) => new VRMLoaderPlugin(parser));
+loader.load(
+  modelFile,
+  (gltf) => {
+    vrm = gltf.userData.vrm;
+    VRMUtils.rotateVRM0(vrm);
+    scene.add(vrm.scene);
+    const h = vrm.humanoid;
+    h.getNormalizedBoneNode('leftUpperArm').rotation.z = -ARM_ANGLE;
+    h.getNormalizedBoneNode('rightUpperArm').rotation.z = ARM_ANGLE;
+  },
+  undefined,
+  (error) => console.error('Could not load the model', error)
+);
+
+window.setNovaState = (s) => {
+  state = s;
+  speaking = (s === 'speaking');
+};
+
+let hideTimer = null;
+function showBubble(heard, reply, autoHide) {
+  heardEl.textContent = heard;
+  heardEl.hidden = !heard;
+  replyEl.textContent = reply;
+  bubble.hidden = false;
+  clearTimeout(hideTimer);
+  if (autoHide) hideTimer = setTimeout(() => { bubble.hidden = true; }, autoHide);
+}
+
+showBubble('', "Hi! I'm Nova. Type a command or press Speak.", 10000);
+
+let lastState = '';
+let lastMsg = 0;
+function render(d) {
+  if (d.state !== lastState) {
+    lastState = d.state;
+    window.setNovaState(d.state);
+  }
+  mic.classList.toggle('live', d.state === 'listening');
+
+  if (d.confirm) {
+    confirmText.textContent = d.confirm;
+    confirmBox.hidden = false;
+  } else {
+    confirmBox.hidden = true;
+  }
+
+  const heard = d.heard ? 'You: ' + d.heard : '';
+  if (d.state === 'listening') {
+    showBubble('', 'Listening... speak now', 0);
+  } else if (d.state === 'thinking') {
+    showBubble(heard, 'Working on it...', 0);
+  } else if (d.msg_id !== lastMsg) {
+    lastMsg = d.msg_id;
+    showBubble(heard, d.message, 20000);
+  }
+}
+
+async function poll() {
+  try {
+    const res = await fetch('/state', { cache: 'no-store' });
+    render(await res.json());
+  } catch (e) {}
+  setTimeout(poll, 100);
+}
+poll();
+
+function call(path, extra) {
+  return fetch('/' + path + '?token=' + encodeURIComponent(TOKEN) + (extra || ''));
+}
+function sendCommand() {
+  const text = cmd.value.trim();
+  if (!text) return;
+  cmd.value = '';
+  call('command', '&text=' + encodeURIComponent(text));
+}
+document.getElementById('send').onclick = sendCommand;
+cmd.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendCommand(); });
+mic.onclick = () => call('voice');
+document.getElementById('allow').onclick = () => call('confirm', '&answer=y');
+document.getElementById('deny').onclick = () => call('confirm', '&answer=n');
+
+let dragging = false;
+let lastX = 0;
+let lastY = 0;
+stage.style.cursor = 'grab';
+stage.addEventListener('pointerdown', (e) => {
+  dragging = true;
+  lastX = e.screenX;
+  lastY = e.screenY;
+  stage.setPointerCapture(e.pointerId);
+  stage.style.cursor = 'grabbing';
+});
+stage.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  const dx = Math.round(e.screenX - lastX);
+  const dy = Math.round(e.screenY - lastY);
+  if (dx || dy) {
+    lastX = e.screenX;
+    lastY = e.screenY;
+    call('move', '&dx=' + dx + '&dy=' + dy);
+  }
+});
+const stopDrag = () => { dragging = false; stage.style.cursor = 'grab'; };
+stage.addEventListener('pointerup', stopDrag);
+stage.addEventListener('pointercancel', stopDrag);
+
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const delta = clock.getDelta();
+  const t = clock.elapsedTime;
+  if (vrm) {
+    const h = vrm.humanoid;
+
+    if (SWAY_ENABLED) {
+      h.getNormalizedBoneNode('spine').rotation.x = Math.sin(t * 1.6) * 0.015;
+      const head = h.getNormalizedBoneNode('head');
+      head.rotation.y = Math.sin(t * 0.6) * 0.08;
+      head.rotation.x = Math.sin(t * 0.9) * 0.02;
+    }
+
+    let blink = 0;
+    if (BLINK_ENABLED) {
+      if (t > nextBlink) {
+        blinkStart = t;
+        nextBlink = t + 4 + Math.random() * 4;
+      }
+      const b = t - blinkStart;
+      blink = (b >= 0 && b < 0.18) ? Math.sin((b / 0.18) * Math.PI) : 0;
+    }
+    vrm.expressionManager.setValue('blink', blink);
+
+    const wantHappy = state === 'listening' ? 0.4 : 0;
+    const wantRelaxed = state === 'thinking' ? 0.5 : 0;
+    const ease = Math.min(1, delta * 6);
+    expr.happy += (wantHappy - expr.happy) * ease;
+    expr.relaxed += (wantRelaxed - expr.relaxed) * ease;
+    vrm.expressionManager.setValue('happy', expr.happy);
+    vrm.expressionManager.setValue('relaxed', expr.relaxed);
+
+    const mouth = speaking ? Math.abs(Math.sin(t * 9)) * 0.7 : 0;
+    vrm.expressionManager.setValue('aa', mouth);
+
+    vrm.update(delta);
+  }
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
