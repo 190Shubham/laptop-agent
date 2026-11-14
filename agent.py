@@ -1,36 +1,50 @@
 import os
 import time
+
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types, errors
+
 from tools.apps import open_website, open_app, create_folder, search_web, play_on_youtube
 from tools.system import get_system_info, take_screenshot, get_current_time
 from tools.files import organize_folder
-from tools.launcher import open_any_app
 from tools.writer import type_text, press_key
+from tools.controls import (volume_change, set_volume, toggle_mute, set_brightness,
+                            change_brightness, lock_computer, shutdown_computer,
+                            cancel_shutdown)
+from tools.closer import close_any_app
+from tools.media import media_control
+from tools.reminders import remind_in, remind_at, list_reminders, clear_reminders
+from tools.weather import get_weather
+from tools.folders import open_folder, open_file
+from tools.system_settings import open_settings, open_system_tool, set_radio
 
 load_dotenv()
 client = genai.Client(api_key=os.getenv("API_KEY"))
 
-TOOLS = [open_website, open_app, create_folder, search_web,
-         get_system_info, take_screenshot, get_current_time,
-         organize_folder, type_text, press_key]
+TOOLS = [
+    open_website, open_app, create_folder, search_web, play_on_youtube,
+    get_system_info, take_screenshot, get_current_time, organize_folder,
+    type_text, press_key,
+    volume_change, set_volume, toggle_mute, set_brightness, change_brightness,
+    lock_computer, shutdown_computer, cancel_shutdown, close_any_app, media_control,
+    remind_in, remind_at, list_reminders, clear_reminders,
+    get_weather, open_folder, open_file,
+    open_settings, open_system_tool, set_radio,
+]
 
-from tools.controls import (volume_change, set_volume, toggle_mute, set_brightness,
-                            change_brightness, close_app, lock_computer,
-                            shutdown_computer, cancel_shutdown)
-
-TOOLS += [volume_change, set_volume, toggle_mute, set_brightness,
-          change_brightness, close_app, lock_computer, shutdown_computer, cancel_shutdown]
-
+# Tries the first model, then the backup if the first is busy
 MODELS = ["gemini-3.5-flash", "gemini-3-flash-preview"]
 
 SYSTEM_PROMPT = (
-   "You are a laptop assistant. Use the provided tools to do what the user asks. "
-    "To open an app, use open_app for notepad, calculator, paint, chrome and vscode, "
-    "and use open_any_app for every other app (WhatsApp, Spotify, Settings and so on). "
+    "You are Nova, a friendly laptop assistant. Use the provided tools to do what the user asks. "
     "Remember what was said earlier in this conversation. "
-    "If no tool can do it, say you can't do that yet. Reply in one short line."
+    "If no tool can do it, say you can't do that yet. Reply in one or two short sentences. "
+    "Only press Enter if the user asks to press enter or send. "
+    "To play a song or video, use play_on_youtube. "
+    "If the user names a browser (brave or chrome), pass it as the browser argument. "
+    "For reminders and timers, use remind_in or remind_at. "
+    "Risky tools ask the user for permission themselves, so call them when asked."
 )
 
 CONFIG = types.GenerateContentConfig(system_instruction=SYSTEM_PROMPT, tools=TOOLS)

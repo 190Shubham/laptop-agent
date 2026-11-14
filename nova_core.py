@@ -1,7 +1,6 @@
 import builtins
 import threading
 import time
-
 from agent import run_agent
 from offline import try_offline
 from voice import listen, speak
@@ -90,7 +89,7 @@ def _worker(command, by_voice, speak_reply):
         _set(state="thinking", heard=command)
         reply = try_offline(command)
         if reply is None:
-            reply = run_agent(command)
+            reply = _run_agent_with_timeout(command)
         _say(reply)
         if speak_reply:
             speak(reply[:200],
@@ -106,7 +105,7 @@ def _worker(command, by_voice, speak_reply):
 
 # ---------- Greeting when Nova starts ----------
 GREET_ON_START = True
-USER_NAME = "Shubham"
+USER_NAME = "Shubham Sir"
 
 
 def _wait_for_internet(max_seconds=20):
@@ -197,3 +196,60 @@ def _announce_worker(text):
         _set(state="idle")
         _last["done"] = time.time()
         _work_lock.release()
+
+
+
+
+# ---------- Do not wait for Gemini forever ----------
+def _run_agent_with_timeout(command, seconds=90):
+    result = {}
+
+    def target():
+        try:
+            result["reply"] = run_agent(command)
+        except Exception as e:
+            result["reply"] = f"Error: {e}"
+
+    thread = threading.Thread(target=target, daemon=True)
+    thread.start()
+    thread.join(seconds)
+    return result.get("reply", "That took too long, so I stopped waiting. Please try again.")
+
+
+
+# ---------- Voice answers to Allow / Deny ----------
+_confirm_listen = {"on": False}
+
+
+def is_confirming():
+    """True while Nova is waiting to hear 'allow' or 'deny'."""
+    return _confirm_listen["on"]
+
+
+def ask_yes_no(prompt=""):
+    """Replaces input(): shows Allow / Deny buttons, reads the question aloud,
+    and also listens for the words allow or deny."""
+    import re
+
+    text = prompt.replace("[CONFIRM]", "").replace("(y/n):", "").strip() or "Allow this action?"
+    _confirm_answer["ok"] = False
+    _confirm_event.clear()
+    _set(confirm=text)
+
+    spoken = re.sub(r"[_()'=\"]", " ", text)
+    try:
+        speak(f"{spoken} Say allow or deny.",
+              on_start=lambda: _set(state="speaking"),
+              on_end=lambda: _set(state="idle"))
+    except Exception as e:
+        print(f"[confirm voice failed: {e}]")
+
+    _set(state="listening")
+    _confirm_listen["on"] = True
+    _confirm_event.wait(timeout=60)
+    _confirm_listen["on"] = False
+    _set(confirm="", state="thinking")
+    return "y" if _confirm_answer["ok"] else "n"
+
+
+builtins.input = ask_yes_no
